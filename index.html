@@ -1,0 +1,86 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kamera Tamu</title>
+<style>
+:root{--bg:#1b1713;--paper:#f3ece0;--ink:#2a2118;--accent:#c8553d}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--paper);font-family:Georgia,'Times New Roman',serif}
+.screen{display:none;min-height:100%;padding:24px;flex-direction:column;justify-content:center;max-width:480px;margin:auto}
+.screen.on{display:flex}
+h1{font-size:2rem;line-height:1.15;font-weight:400;margin:0 0 .5rem}
+p{opacity:.8;line-height:1.5}
+input{font:inherit;padding:14px;border-radius:6px;border:0;margin:16px 0 12px;width:100%}
+button{font:inherit;padding:14px 18px;border-radius:6px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
+button.ghost{background:#ffffff1f}
+#cam{padding:0;max-width:none;justify-content:flex-start;height:100%}
+video{width:100%;flex:1;min-height:0;object-fit:cover;background:#000}
+.bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px calc(16px + env(safe-area-inset-bottom))}
+.shutter{width:72px;height:72px;border-radius:50%;background:var(--paper);border:5px solid var(--bg);outline:3px solid var(--paper)}
+.count{font-size:1.4rem;min-width:70px}
+#grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:16px}
+#grid img{width:100%;aspect-ratio:1;object-fit:cover}
+.msg{min-height:1.4em;color:#ffb4a3}
+</style></head><body>
+<section id="s-name" class="screen">
+  <h1 id="title">Kamera tamu</h1>
+  <p>Foto yang kamu ambil akan masuk ke album bersama. Hasilnya terungkap serentak untuk semua tamu.</p>
+  <input id="name" placeholder="Nama kamu" maxlength="40" autocomplete="name">
+  <button id="go">Mulai memotret</button>
+</section>
+<section id="cam" class="screen">
+  <video id="v" playsinline muted autoplay></video>
+  <div class="bar"><span class="count" id="cnt"></span><button class="shutter" id="snap" aria-label="Ambil foto"></button><button class="ghost" id="flip">Balik</button></div>
+  <div class="msg" style="padding:0 24px 12px" id="msg"></div>
+</section>
+<section id="s-done" class="screen">
+  <h1 id="done-t">Jatah fotomu habis</h1>
+  <p id="done-p"></p><div id="grid"></div>
+</section>
+<canvas id="c" hidden></canvas>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const $=id=>document.getElementById(id),db=supabase.createClient(CFG.url,CFG.key);
+const show=id=>document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+const L=localStorage;let S,facing='environment',stream,busy=false;
+const gid=L.sa_gid||(L.sa_gid=crypto.randomUUID());
+const used=()=>+L.sa_used||0;
+function film(c){const x=c.getContext('2d'),d=x.getImageData(0,0,c.width,c.height),p=d.data;
+  const f=v=>Math.min(1,Math.max(0,((v-.5)*1.08+.5)*.92+.05));
+  for(let i=0;i<p.length;i+=4){const n=(Math.random()-.5)*.06;
+    p[i]=f(p[i]/255*1.06+.02+n)*255;p[i+1]=f(p[i+1]/255+n)*255;p[i+2]=f(p[i+2]/255*.92+.03+n)*255}
+  x.putImageData(d,0,0)}
+async function start(){
+  if(used()>=S.max_shots)return finish();
+  show('cam');upd();
+  try{stream&&stream.getTracks().forEach(t=>t.stop());
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920}},audio:false});
+    $('v').srcObject=stream}catch(e){$('msg').textContent='Kamera tidak bisa dibuka. Izinkan akses kamera di browser, lalu muat ulang halaman.'}}
+const upd=()=>$('cnt').textContent=(S.max_shots-used())+' sisa';
+async function snap(){
+  if(busy||!stream)return;busy=true;$('msg').textContent='';
+  const v=$('v'),c=$('c'),k=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight));
+  c.width=v.videoWidth*k;c.height=v.videoHeight*k;c.getContext('2d').drawImage(v,0,0,c.width,c.height);film(c);
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));
+  const path=gid+'/'+crypto.randomUUID()+'.jpg';
+  const u=await db.storage.from('photos').upload(path,blob,{contentType:'image/jpeg'});
+  if(u.error){$('msg').textContent='Foto gagal terkirim. Cek koneksi, lalu coba lagi.';busy=false;return}
+  const r=await db.from('photos').insert({guest_id:gid,guest_name:L.sa_name,path});
+  if(r.error){$('msg').textContent='Foto tersimpan tapi data gagal dicatat. Coba lagi.';busy=false;return}
+  L.sa_used=used()+1;busy=false;navigator.vibrate&&navigator.vibrate(30);
+  used()>=S.max_shots?finish():upd()}
+async function finish(){
+  stream&&stream.getTracks().forEach(t=>t.stop());show('s-done');
+  const when=new Date(S.reveal_at);
+  if(new Date()<when){$('done-p').textContent='Terima kasih, '+L.sa_name+'. Album akan terungkap pada '+when.toLocaleString('id-ID',{dateStyle:'full',timeStyle:'short'})+'.';return}
+  $('done-t').textContent='Album pernikahan';$('done-p').textContent='Foto dari semua tamu:';
+  const {data}=await db.from('photos').select('path').order('created_at');
+  $('grid').innerHTML=(data||[]).map(p=>'<a href="'+db.storage.from('photos').getPublicUrl(p.path).data.publicUrl+'" target="_blank"><img loading="lazy" src="'+db.storage.from('photos').getPublicUrl(p.path).data.publicUrl+'" alt=""></a>').join('')}
+$('go').onclick=()=>{const n=$('name').value.trim();if(!n){$('name').focus();return}L.sa_name=n;start()};
+$('snap').onclick=snap;$('flip').onclick=()=>{facing=facing==='environment'?'user':'environment';start()};
+(async()=>{const r=await db.from('settings').select('*').eq('id',1).single();
+  if(r.error){document.body.innerHTML='<p style="padding:24px">Halaman belum siap. Periksa config.js.</p>';return}
+  S=r.data;$('title').textContent=S.event_name;document.title=S.event_name;
+  if(L.sa_name){used()>=S.max_shots?finish():start()}else show('s-name')})();
+</script></body></html>
