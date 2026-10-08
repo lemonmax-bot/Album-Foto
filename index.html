@@ -2,7 +2,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Kamera Tamu</title>
 <style>
-:root{--bg:#1b1713;--paper:#f3ece0;--ink:#2a2118;--accent:#c8553d}
+:root{--bg:#1b1713;--paper:#f3ece0;--accent:#c8553d}
 *{box-sizing:border-box}html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--paper);font-family:Georgia,'Times New Roman',serif}
 .screen{display:none;min-height:100%;padding:24px;flex-direction:column;justify-content:center;max-width:480px;margin:auto}
@@ -11,76 +11,114 @@ h1{font-size:2rem;line-height:1.15;font-weight:400;margin:0 0 .5rem}
 p{opacity:.8;line-height:1.5}
 input{font:inherit;padding:14px;border-radius:6px;border:0;margin:16px 0 12px;width:100%}
 button{font:inherit;padding:14px 18px;border-radius:6px;border:0;background:var(--accent);color:#fff;cursor:pointer}
-button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
-button.ghost{background:#ffffff1f}
-#cam{padding:0;max-width:none;justify-content:flex-start;height:100%}
-video{width:100%;flex:1;min-height:0;object-fit:cover;background:#000}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:2px}
+button.ghost{background:#ffffff26}
+#cam{padding:0;max-width:none;justify-content:flex-start;height:100%;position:relative}
+video{width:100%;flex:1;min-height:0;object-fit:cover;background:#000;transition:opacity .12s}
 .bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px calc(16px + env(safe-area-inset-bottom))}
-.shutter{width:72px;height:72px;border-radius:50%;background:var(--paper);border:5px solid var(--bg);outline:3px solid var(--paper)}
-.count{font-size:1.4rem;min-width:70px}
-#grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:16px}
-#grid img{width:100%;aspect-ratio:1;object-fit:cover}
-.msg{min-height:1.4em;color:#ffb4a3}
+.shutter{width:72px;height:72px;border-radius:50%;background:var(--paper);border:5px solid var(--bg);outline:3px solid var(--paper);padding:0}
+.count{font-size:1.4rem;min-width:80px}
+.top{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px}
+#s-album{justify-content:flex-start;max-width:720px}
+#grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:16px 0}
+#grid img{width:100%;aspect-ratio:1;object-fit:cover;background:#2c261f}
+.msg{min-height:1.2em;color:#ffb4a3;padding:0 24px 8px;font-size:.95rem}
+.row{display:flex;gap:8px;flex-wrap:wrap}
 </style></head><body>
 <section id="s-name" class="screen">
   <h1 id="title">Kamera tamu</h1>
-  <p>Foto yang kamu ambil akan masuk ke album bersama. Hasilnya terungkap serentak untuk semua tamu.</p>
+  <p>Kamu punya <b id="n-shots">5</b> foto. Hasilnya masuk ke album bersama yang bisa dilihat semua tamu.</p>
   <input id="name" placeholder="Nama kamu" maxlength="40" autocomplete="name">
   <button id="go">Mulai memotret</button>
 </section>
 <section id="cam" class="screen">
   <video id="v" playsinline muted autoplay></video>
+  <button class="ghost top" id="toAlbum">Album</button>
+  <div class="msg" id="msg"></div>
   <div class="bar"><span class="count" id="cnt"></span><button class="shutter" id="snap" aria-label="Ambil foto"></button><button class="ghost" id="flip">Balik</button></div>
-  <div class="msg" style="padding:0 24px 12px" id="msg"></div>
 </section>
-<section id="s-done" class="screen">
-  <h1 id="done-t">Jatah fotomu habis</h1>
-  <p id="done-p"></p><div id="grid"></div>
+<section id="s-album" class="screen">
+  <h1 id="al-t">Album pernikahan</h1>
+  <p id="al-p"></p>
+  <div class="row"><button class="ghost" id="al-back">Kembali ke kamera</button></div>
+  <div id="grid"></div>
+  <button class="ghost" id="more" hidden>Muat lagi</button>
+  <div class="msg" id="msg2" style="padding:12px 0"></div>
 </section>
-<canvas id="c" hidden></canvas>
+<canvas id="c" hidden></canvas><canvas id="t" hidden></canvas>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script>
-const $=id=>document.getElementById(id),db=supabase.createClient(CFG.url,CFG.key);
+const $=id=>document.getElementById(id),db=supabase.createClient(CFG.url,CFG.key),bk=db.storage.from('photos');
 const show=id=>document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
-const L=localStorage;let S,facing='environment',stream,busy=false;
+const L=localStorage,PS=30;let S,facing='environment',stream,busy=false,page=0,flushing=false;
 const gid=L.sa_gid||(L.sa_gid=crypto.randomUUID());
-const used=()=>+L.sa_used||0;
-function film(c){const x=c.getContext('2d'),d=x.getImageData(0,0,c.width,c.height),p=d.data;
-  const f=v=>Math.min(1,Math.max(0,((v-.5)*1.08+.5)*.92+.05));
-  for(let i=0;i<p.length;i+=4){const n=(Math.random()-.5)*.06;
-    p[i]=f(p[i]/255*1.06+.02+n)*255;p[i+1]=f(p[i+1]/255+n)*255;p[i+2]=f(p[i+2]/255*.92+.03+n)*255}
+const used=()=>+L.sa_used||0,left=()=>S.max_shots-used();
+const revealed=()=>new Date()>=new Date(S.reveal_at);
+const pub=p=>bk.getPublicUrl(p).data.publicUrl,thumb=p=>p.replace('.jpg','_t.jpg');
+let Q=[];try{Q=JSON.parse(L.sa_q||'[]')}catch(e){}
+const saveQ=()=>{try{L.sa_q=JSON.stringify(Q);return true}catch(e){return false}};
+const note=m=>{$('msg').textContent=m;$('msg2').textContent=m};
+const pend=()=>note(Q.length?Q.length+' foto menunggu terkirim. Biarkan halaman ini terbuka.':'');
+// Portra hangat: hangat, kontras lembut, bayangan terangkat, highlight lembut, grain halus, vinyet tipis
+function T(v,vg,n){v=(v-.5)*1.06+.5;if(v>.82)v=.82+(v-.82)*.65;v=(.04+v*.94)*vg+n;return v<0?0:v>1?255:v*255}
+function film(c){const w=c.width,h=c.height,x=c.getContext('2d'),d=x.getImageData(0,0,w,h),p=d.data,cx=w/2,cy=h/2,md=cx*cx+cy*cy;
+  for(let i=0,j=0;i<p.length;i+=4,j++){
+    let r=p[i]/255*1.05,g=p[i+1]/255*1.01,b=p[i+2]/255*.93;
+    const px=j%w-cx,py=((j/w)|0)-cy,vg=1-.16*(px*px+py*py)/md,l=.3*r+.59*g+.11*b;
+    r=l+(r-l)*.92;g=l+(g-l)*.92;b=l+(b-l)*.92;const n=(Math.random()-.5)*.05;
+    p[i]=T(r,vg,n);p[i+1]=T(g,vg,n);p[i+2]=T(b,vg,n)}
   x.putImageData(d,0,0)}
+async function flush(){
+  if(flushing||!Q.length)return;flushing=true;
+  while(Q.length){const it=Q[0];
+    try{
+      const [fb,tb]=await Promise.all([fetch(it.f).then(r=>r.blob()),fetch(it.t).then(r=>r.blob())]);
+      for(const [p,b] of [[it.p,fb],[thumb(it.p),tb]]){
+        const u=await bk.upload(p,b,{contentType:'image/jpeg'});
+        if(u.error&&!/exists|duplicate/i.test(u.error.message))throw u.error}
+      const r=await db.from('photos').insert({guest_id:gid,guest_name:L.sa_name,path:it.p});
+      if(r.error&&r.error.code!=='23505'&&!/jatah/.test(r.error.message))throw r.error;
+      Q.shift();saveQ();pend()
+    }catch(e){break}}
+  flushing=false;pend();if(Q.length)setTimeout(flush,6000)}
+addEventListener('online',flush);
+const upd=()=>$('cnt').textContent=left()+' foto lagi';
 async function start(){
-  if(used()>=S.max_shots)return finish();
-  show('cam');upd();
+  if(left()<=0)return album();
+  show('cam');upd();pend();$('toAlbum').hidden=!revealed();
   try{stream&&stream.getTracks().forEach(t=>t.stop());
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920}},audio:false});
-    $('v').srcObject=stream}catch(e){$('msg').textContent='Kamera tidak bisa dibuka. Izinkan akses kamera di browser, lalu muat ulang halaman.'}}
-const upd=()=>$('cnt').textContent=(S.max_shots-used())+' sisa';
+    $('v').srcObject=stream}catch(e){note('Kamera tidak bisa dibuka. Izinkan akses kamera di browser, lalu muat ulang halaman.')}}
 async function snap(){
-  if(busy||!stream)return;busy=true;$('msg').textContent='';
-  const v=$('v'),c=$('c'),k=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight));
-  c.width=v.videoWidth*k;c.height=v.videoHeight*k;c.getContext('2d').drawImage(v,0,0,c.width,c.height);film(c);
-  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8));
-  const path=gid+'/'+crypto.randomUUID()+'.jpg';
-  const u=await db.storage.from('photos').upload(path,blob,{contentType:'image/jpeg'});
-  if(u.error){$('msg').textContent='Foto gagal terkirim. Cek koneksi, lalu coba lagi.';busy=false;return}
-  const r=await db.from('photos').insert({guest_id:gid,guest_name:L.sa_name,path});
-  if(r.error){$('msg').textContent='Foto tersimpan tapi data gagal dicatat. Coba lagi.';busy=false;return}
-  L.sa_used=used()+1;busy=false;navigator.vibrate&&navigator.vibrate(30);
-  used()>=S.max_shots?finish():upd()}
-async function finish(){
-  stream&&stream.getTracks().forEach(t=>t.stop());show('s-done');
-  const when=new Date(S.reveal_at);
-  if(new Date()<when){$('done-p').textContent='Terima kasih, '+L.sa_name+'. Album akan terungkap pada '+when.toLocaleString('id-ID',{dateStyle:'full',timeStyle:'short'})+'.';return}
-  $('done-t').textContent='Album pernikahan';$('done-p').textContent='Foto dari semua tamu:';
-  const {data}=await db.from('photos').select('path').order('created_at');
-  $('grid').innerHTML=(data||[]).map(p=>'<a href="'+db.storage.from('photos').getPublicUrl(p.path).data.publicUrl+'" target="_blank"><img loading="lazy" src="'+db.storage.from('photos').getPublicUrl(p.path).data.publicUrl+'" alt=""></a>').join('')}
+  if(busy||!stream||left()<=0)return;busy=true;
+  const v=$('v'),c=$('c'),t=$('t'),k=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight));
+  c.width=Math.round(v.videoWidth*k);c.height=Math.round(v.videoHeight*k);
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);film(c);
+  const tk=480/Math.max(c.width,c.height);t.width=Math.round(c.width*tk);t.height=Math.round(c.height*tk);
+  t.getContext('2d').drawImage(c,0,0,t.width,t.height);
+  Q.push({p:gid+'/'+crypto.randomUUID()+'.jpg',f:c.toDataURL('image/jpeg',.8),t:t.toDataURL('image/jpeg',.7)});
+  if(!saveQ()){Q.pop();note('Memori HP penuh. Tunggu foto sebelumnya terkirim, lalu coba lagi.');busy=false;return}
+  L.sa_used=used()+1;v.style.opacity=.2;setTimeout(()=>v.style.opacity=1,120);
+  navigator.vibrate&&navigator.vibrate(30);busy=false;upd();pend();flush();
+  if(left()<=0)setTimeout(album,700)}
+async function album(){
+  stream&&stream.getTracks().forEach(t=>t.stop());show('s-album');pend();
+  $('al-back').hidden=left()<=0;$('grid').innerHTML='';$('more').hidden=true;
+  $('al-t').textContent=left()<=0?'Jatah fotomu habis':'Album pernikahan';
+  if(!revealed()){$('al-p').textContent='Terima kasih, '+L.sa_name+'. Album terungkap pada '+new Date(S.reveal_at).toLocaleString('id-ID',{dateStyle:'full',timeStyle:'short'})+'.';return}
+  $('al-p').textContent='Foto dari semua tamu, yang terbaru di atas. Ketuk foto untuk membuka ukuran penuh.';
+  page=0;more()}
+async function more(){
+  const {data}=await db.from('photos').select('path').order('created_at',{ascending:false}).range(page*PS,page*PS+PS-1);
+  (data||[]).forEach(p=>{const a=document.createElement('a'),i=new Image();a.href=pub(p.path);a.target='_blank';
+    i.loading='lazy';i.alt='';i.src=pub(thumb(p.path));i.onerror=()=>{i.onerror=null;i.src=a.href};a.append(i);$('grid').append(a)});
+  page++;$('more').hidden=!data||data.length<PS}
 $('go').onclick=()=>{const n=$('name').value.trim();if(!n){$('name').focus();return}L.sa_name=n;start()};
-$('snap').onclick=snap;$('flip').onclick=()=>{facing=facing==='environment'?'user':'environment';start()};
+$('snap').onclick=snap;$('more').onclick=more;$('toAlbum').onclick=album;$('al-back').onclick=start;
+$('flip').onclick=()=>{facing=facing==='environment'?'user':'environment';start()};
 (async()=>{const r=await db.from('settings').select('*').eq('id',1).single();
   if(r.error){document.body.innerHTML='<p style="padding:24px">Halaman belum siap. Periksa config.js.</p>';return}
-  S=r.data;$('title').textContent=S.event_name;document.title=S.event_name;
-  if(L.sa_name){used()>=S.max_shots?finish():start()}else show('s-name')})();
+  S=r.data;$('title').textContent=S.event_name;$('n-shots').textContent=S.max_shots;document.title=S.event_name;
+  flush();L.sa_name?start():show('s-name')})();
 </script></body></html>

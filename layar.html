@@ -1,0 +1,21 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Layar foto</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:Georgia,serif;color:#f3ece0}
+img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity 1s}img.on{opacity:1}
+#cap{position:absolute;left:24px;bottom:20px;font-size:1.6rem;text-shadow:0 2px 8px #000}
+#hint{position:absolute;right:24px;bottom:24px;opacity:.7;font-size:1.1rem;text-shadow:0 2px 8px #000}
+#empty{position:absolute;inset:0;display:grid;place-items:center;font-size:1.6rem;text-align:center;padding:24px}</style></head><body>
+<img id="a" alt=""><img id="b" alt=""><div id="empty">Menunggu foto pertama dari tamu…</div>
+<div id="cap"></div><div id="hint">Scan QR di meja untuk ikut memotret</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+const db=supabase.createClient(CFG.url,CFG.key),bk=db.storage.from('photos'),$=id=>document.getElementById(id);
+let list=[],seen=new Set(),front=$('a'),back=$('b');
+async function poll(){const {data}=await db.from('photos').select('path,guest_name').order('created_at',{ascending:false}).limit(200);if(data)list=data}
+function next(){if(!list.length)return;$('empty').hidden=true;
+  const p=list.find(x=>!seen.has(x.path))||list[Math.floor(Math.random()*list.length)];seen.add(p.path);
+  back.onload=()=>{back.classList.add('on');front.classList.remove('on');[front,back]=[back,front];$('cap').textContent=p.guest_name};
+  back.src=bk.getPublicUrl(p.path).data.publicUrl}
+poll().then(next);setInterval(poll,10000);setInterval(next,7000);
+</script></body></html>

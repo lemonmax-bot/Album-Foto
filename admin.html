@@ -2,34 +2,39 @@
 <title>Admin album</title>
 <style>body{font-family:Georgia,serif;background:#f3ece0;color:#2a2118;max-width:900px;margin:auto;padding:24px}
 input,button{font:inherit;padding:10px;margin:4px 4px 4px 0}button{background:#c8553d;color:#fff;border:0;border-radius:6px;cursor:pointer}
-#g{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}#g img{width:100%;aspect-ratio:1;object-fit:cover}
-label{display:block;margin-top:10px}</style></head><body>
+#g{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px}#g img{width:100%;aspect-ratio:1;object-fit:cover;cursor:pointer}
+label{display:block;margin-top:10px}a{color:#c8553d}</style></head><body>
 <h1>Admin album</h1>
 <div id="login"><input id="em" type="email" placeholder="Email admin"><input id="pw" type="password" placeholder="Password"><button id="in">Masuk</button><div id="err"></div></div>
 <div id="app" hidden>
+  <p><a href="layar.html" target="_blank">Layar slideshow</a> · <a href="qr.html" target="_blank">Cetak QR</a></p>
   <h2>Pengaturan</h2>
   <label>Nama acara <input id="en"></label>
-  <label>Waktu foto terungkap <input id="ra" type="datetime-local"></label>
+  <label>Album terbuka mulai <input id="ra" type="datetime-local"></label>
   <label>Jatah foto per tamu <input id="ms" type="number" min="1" max="50"></label>
   <button id="save">Simpan pengaturan</button> <span id="ok"></span>
   <h2>Foto <span id="total"></span></h2>
+  <p>Ketuk foto untuk menghapusnya (menampilkan 200 terbaru).</p>
   <div id="zips"></div><p id="prog"></p><div id="g"></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="config.js"></script>
 <script>
-const $=id=>document.getElementById(id),db=supabase.createClient(CFG.url,CFG.key),B=200;let P=[];
-const url=p=>db.storage.from('photos').getPublicUrl(p).data.publicUrl;
+const $=id=>document.getElementById(id),db=supabase.createClient(CFG.url,CFG.key),bk=db.storage.from('photos'),B=200;let P=[];
+const url=p=>bk.getPublicUrl(p).data.publicUrl,th=p=>p.replace('.jpg','_t.jpg');
 const loc=d=>{const o=new Date(d);o.setMinutes(o.getMinutes()-o.getTimezoneOffset());return o.toISOString().slice(0,16)};
 async function load(){
   const s=(await db.from('settings').select('*').eq('id',1).single()).data;
   $('en').value=s.event_name;$('ra').value=loc(s.reveal_at);$('ms').value=s.max_shots;
-  P=(await db.from('photos').select('*').order('created_at').limit(10000)).data||[];
-  $('total').textContent='('+P.length+')';
-  $('g').innerHTML=P.slice(-120).map(p=>'<img loading="lazy" title="'+p.guest_name.replace(/"/g,'')+'" src="'+url(p.path)+'">').join('');
+  P=(await db.from('photos').select('id,guest_id,guest_name,path').order('created_at').limit(10000)).data||[];
+  $('total').textContent='('+P.length+' foto dari '+new Set(P.map(p=>p.guest_id)).size+' tamu)';
+  $('g').innerHTML='';P.slice(-200).reverse().forEach(p=>{const i=new Image();i.loading='lazy';i.title=p.guest_name;i.src=url(th(p.path));
+    i.onerror=()=>{i.onerror=null;i.src=url(p.path)};i.onclick=()=>del(p);$('g').append(i)});
   $('zips').innerHTML='';for(let i=0;i<P.length;i+=B){const b=document.createElement('button');
     b.textContent='Unduh foto '+(i+1)+'–'+Math.min(i+B,P.length);b.onclick=()=>zip(i);$('zips').append(b)}}
+async function del(p){if(!confirm('Hapus foto dari '+p.guest_name+'?'))return;
+  await bk.remove([p.path,th(p.path)]);await db.from('photos').delete().eq('id',p.id);load()}
 async function zip(i){const z=new JSZip(),part=P.slice(i,i+B);let n=0;
   for(const p of part){const r=await fetch(url(p.path));z.file(p.guest_name.replace(/[^\w ]/g,'')+'_'+p.path.split('/')[1],await r.blob());$('prog').textContent='Mengemas '+(++n)+'/'+part.length}
   const a=document.createElement('a');a.href=URL.createObjectURL(await z.generateAsync({type:'blob'}));a.download='album_'+(i/B+1)+'.zip';a.click();$('prog').textContent='Selesai.'}

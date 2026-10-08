@@ -1,0 +1,15 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cetak QR</title>
+<style>body{font-family:Georgia,serif;background:#f3ece0;color:#2a2118;text-align:center;padding:24px}
+input{font:inherit;padding:10px;width:min(480px,90%)}button{font:inherit;padding:10px 16px;background:#c8553d;color:#fff;border:0;border-radius:6px;cursor:pointer}
+#q{display:inline-block;background:#fff;padding:20px;margin:24px 0}h1{font-weight:400}
+@media print{.no{display:none}body{background:#fff}}</style></head><body>
+<h1>Ikut memotret!</h1><p>Scan, isi nama, dan ambil 5 fotomu.<br>Tanpa aplikasi.</p>
+<div id="q"></div>
+<div class="no"><p><input id="u"> <button id="p">Cetak</button></p><p>Cek dulu alamat di atas sudah alamat halaman tamu.</p></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const u=document.getElementById('u');u.value=location.href.replace(/qr\.html.*$/,'');
+let qr;function draw(){document.getElementById('q').innerHTML='';qr=new QRCode(document.getElementById('q'),{text:u.value,width:300,height:300,correctLevel:QRCode.CorrectLevel.M})}
+u.oninput=draw;document.getElementById('p').onclick=()=>print();draw();
+</script></body></html>
