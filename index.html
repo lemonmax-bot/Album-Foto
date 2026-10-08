@@ -14,7 +14,10 @@ button{font:inherit;padding:14px 18px;border-radius:6px;border:0;background:var(
 button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:2px}
 button.ghost{background:#ffffff26}
 #cam{padding:0;max-width:none;justify-content:flex-start;height:100%;position:relative}
-video{width:100%;flex:1;min-height:0;object-fit:cover;background:#000;transition:opacity .12s}
+#cam{overflow:hidden}.vw{flex:1;min-height:0;position:relative;overflow:hidden;background:#000}
+video{width:100%;height:100%;object-fit:cover;transition:opacity .12s}
+.zoom{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:8px}
+.zb{padding:8px 12px;min-width:46px;border-radius:999px;background:#000a;color:#fff}.zb.on{background:var(--paper);color:#1b1713}
 .bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px calc(16px + env(safe-area-inset-bottom))}
 .shutter{width:72px;height:72px;border-radius:50%;background:var(--paper);border:5px solid var(--bg);outline:3px solid var(--paper);padding:0}
 .count{font-size:1.4rem;min-width:80px}
@@ -32,7 +35,7 @@ video{width:100%;flex:1;min-height:0;object-fit:cover;background:#000;transition
   <button id="go">Mulai memotret</button>
 </section>
 <section id="cam" class="screen">
-  <video id="v" playsinline muted autoplay></video>
+  <div class="vw"><video id="v" playsinline muted autoplay></video><div class="zoom" id="zoom"></div></div>
   <button class="ghost top" id="toAlbum">Album</button>
   <div class="msg" id="msg"></div>
   <div class="bar"><span class="count" id="cnt"></span><button class="shutter" id="snap" aria-label="Ambil foto"></button><button class="ghost" id="flip">Balik</button></div>
@@ -62,13 +65,25 @@ const note=m=>{$('msg').textContent=m;$('msg2').textContent=m};
 const pend=()=>note(Q.length?Q.length+' foto menunggu terkirim. Biarkan halaman ini terbuka.':'');
 // Portra hangat: hangat, kontras lembut, bayangan terangkat, highlight lembut, grain halus, vinyet tipis
 function T(v,vg,n){v=(v-.5)*1.06+.5;if(v>.82)v=.82+(v-.82)*.65;v=(.04+v*.94)*vg+n;return v<0?0:v>1?255:v*255}
-function film(c){const w=c.width,h=c.height,x=c.getContext('2d'),d=x.getImageData(0,0,w,h),p=d.data,cx=w/2,cy=h/2,md=cx*cx+cy*cy;
+function portra(c){const w=c.width,h=c.height,x=c.getContext('2d'),d=x.getImageData(0,0,w,h),p=d.data,cx=w/2,cy=h/2,md=cx*cx+cy*cy;
   for(let i=0,j=0;i<p.length;i+=4,j++){
     let r=p[i]/255*1.05,g=p[i+1]/255*1.01,b=p[i+2]/255*.93;
     const px=j%w-cx,py=((j/w)|0)-cy,vg=1-.16*(px*px+py*py)/md,l=.3*r+.59*g+.11*b;
     r=l+(r-l)*.92;g=l+(g-l)*.92;b=l+(b-l)*.92;const n=(Math.random()-.5)*.05;
     p[i]=T(r,vg,n);p[i+1]=T(g,vg,n);p[i+2]=T(b,vg,n)}
   x.putImageData(d,0,0)}
+// Flash look: kamera sekali pakai, tengah terang kena flash, tepi gelap, warna jenuh, bayangan sedikit kebiruan
+const STYLE='flash';
+function F(v,n){v=(v-.5)*1.15+.5+.02+n;return v<0?0:v>1?255:v*255}
+function flash(c){const w=c.width,h=c.height,x=c.getContext('2d'),d=x.getImageData(0,0,w,h),p=d.data,cx=w/2,cy=h/2,md=cx*cx+cy*cy;
+  for(let i=0,j=0;i<p.length;i+=4,j++){
+    const px=j%w-cx,py=((j/w)|0)-cy,gain=1.12-.36*(px*px+py*py)/md;
+    let r=p[i]/255*gain*1.04,g=p[i+1]/255*gain,b=p[i+2]/255*gain*.94;
+    const l=.3*r+.59*g+.11*b,sh=1-Math.min(1,l);
+    r=l+(r-l)*1.15;g=l+(g-l)*1.15+sh*.01;b=l+(b-l)*1.15+sh*.03;const n=(Math.random()-.5)*.06;
+    p[i]=F(r,n);p[i+1]=F(g,n);p[i+2]=F(b,n)}
+  x.putImageData(d,0,0)}
+const film=c=>STYLE==='flash'?flash(c):portra(c);
 async function flush(){
   if(flushing||!Q.length)return;flushing=true;
   while(Q.length){const it=Q[0];
@@ -83,18 +98,31 @@ async function flush(){
     }catch(e){break}}
   flushing=false;pend();if(Q.length)setTimeout(flush,6000)}
 addEventListener('online',flush);
+let zoom=1,hw=false,track;
+function initZoom(){
+  track=stream.getVideoTracks()[0];const c=track.getCapabilities?track.getCapabilities():{};
+  hw=!!c.zoom;const min=hw?c.zoom.min:1,max=hw?c.zoom.max:3;
+  const opts=[0.5,1,2,3].filter(z=>z>=min-.01&&z<=max+.01);
+  $('zoom').innerHTML='';
+  if(opts.length>1)opts.forEach(z=>{const b=document.createElement('button');b.className='zb';b.textContent=z+'x';b.dataset.z=z;b.onclick=()=>setZoom(z);$('zoom').append(b)});
+  setZoom(1)}
+async function setZoom(z){zoom=z;
+  document.querySelectorAll('.zb').forEach(b=>b.classList.toggle('on',+b.dataset.z===z));
+  if(hw){try{await track.applyConstraints({advanced:[{zoom:z}]})}catch(e){}$('v').style.transform=''}
+  else $('v').style.transform='scale('+z+')'}
 const upd=()=>$('cnt').textContent=left()+' foto lagi';
 async function start(){
   if(left()<=0)return album();
   show('cam');upd();pend();$('toAlbum').hidden=!revealed();
   try{stream&&stream.getTracks().forEach(t=>t.stop());
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920}},audio:false});
-    $('v').srcObject=stream}catch(e){note('Kamera tidak bisa dibuka. Izinkan akses kamera di browser, lalu muat ulang halaman.')}}
+    $('v').srcObject=stream;initZoom()}catch(e){note('Kamera tidak bisa dibuka. Izinkan akses kamera di browser, lalu muat ulang halaman.')}}
 async function snap(){
   if(busy||!stream||left()<=0)return;busy=true;
-  const v=$('v'),c=$('c'),t=$('t'),k=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight));
-  c.width=Math.round(v.videoWidth*k);c.height=Math.round(v.videoHeight*k);
-  c.getContext('2d').drawImage(v,0,0,c.width,c.height);film(c);
+  const v=$('v'),c=$('c'),t=$('t'),vw=v.videoWidth,vh=v.videoHeight,sc=Math.max(v.clientWidth/vw,v.clientHeight/vh);
+  let sw=v.clientWidth/sc,sh=v.clientHeight/sc;if(!hw){sw/=zoom;sh/=zoom}
+  const k=Math.min(1,1280/Math.max(sw,sh));c.width=Math.round(sw*k);c.height=Math.round(sh*k);
+  c.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,c.width,c.height);film(c);
   const tk=480/Math.max(c.width,c.height);t.width=Math.round(c.width*tk);t.height=Math.round(c.height*tk);
   t.getContext('2d').drawImage(c,0,0,t.width,t.height);
   Q.push({p:gid+'/'+crypto.randomUUID()+'.jpg',f:c.toDataURL('image/jpeg',.8),t:t.toDataURL('image/jpeg',.7)});
