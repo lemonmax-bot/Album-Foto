@@ -7,21 +7,29 @@
 body{background:var(--bg);color:var(--paper);font-family:Georgia,'Times New Roman',serif}
 .screen{display:none;min-height:100%;padding:24px;flex-direction:column;justify-content:center;max-width:480px;margin:auto}
 .screen.on{display:flex}
-h1{font-size:2rem;line-height:1.15;font-weight:400;margin:0 0 .5rem}
-p{opacity:.8;line-height:1.5}
+h1{font-size:2.3rem;line-height:1.15;font-weight:400;margin:0 0 .6rem}
+p{opacity:.85;line-height:1.55}
+.ev{font-style:italic;opacity:.65;margin:0 0 .4rem}
 input{font:inherit;padding:14px;border-radius:6px;border:0;margin:16px 0 12px;width:100%}
 button{font:inherit;padding:14px 18px;border-radius:6px;border:0;background:var(--accent);color:#fff;cursor:pointer}
 button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #fff;outline-offset:2px}
 button.ghost{background:#ffffff26}
-#cam{padding:0;max-width:none;justify-content:flex-start;height:100%;position:relative}
-#cam{overflow:hidden}.vw{flex:1;min-height:0;position:relative;overflow:hidden;background:#000}
+#cam{padding:0;max-width:none;justify-content:flex-start;height:100%;position:relative;overflow:hidden}
+.vw{flex:1;min-height:0;position:relative;overflow:hidden;background:#000}
+.vw::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,var(--vg,0)) 100%)}
 video{width:100%;height:100%;object-fit:cover;transition:opacity .12s}
-.zoom{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:8px}
+.zoom,.looks{position:absolute;left:0;right:0;display:flex;justify-content:center;gap:8px;z-index:2}
+.zoom{bottom:12px}.looks{bottom:62px}
 .zb{padding:8px 12px;min-width:46px;border-radius:999px;background:#000a;color:#fff}.zb.on{background:var(--paper);color:#1b1713}
+.lb{padding:7px 12px;border-radius:999px;background:#000a;color:#fff;font-size:.9rem}.lb.on{background:var(--accent)}
 .bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px calc(16px + env(safe-area-inset-bottom))}
 .shutter{width:72px;height:72px;border-radius:50%;background:var(--paper);border:5px solid var(--bg);outline:3px solid var(--paper);padding:0}
-.count{font-size:1.4rem;min-width:80px}
-.top{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px}
+.count{font-size:1.3rem;min-width:96px}
+.ic{width:52px;height:52px;border-radius:50%;padding:0;display:grid;place-items:center;background:#ffffff26;color:#fff}
+.ic.on{background:var(--paper);color:#1b1713}.ic svg{width:24px;height:24px}
+.top{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:3}
+.top.l{left:12px;right:auto;width:46px;height:46px;background:#0007}
+#sf{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .08s;z-index:20}#sf.on{opacity:1}
 #s-album{justify-content:flex-start;max-width:720px}
 #grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:16px 0}
 #grid img{width:100%;aspect-ratio:1;object-fit:cover;background:#2c261f}
@@ -29,16 +37,19 @@ video{width:100%;height:100%;object-fit:cover;transition:opacity .12s}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 </style></head><body>
 <section id="s-name" class="screen">
-  <h1 id="title">Kamera tamu</h1>
-  <p>Kamu punya <b id="n-shots">5</b> foto. Hasilnya masuk ke album bersama yang bisa dilihat semua tamu.</p>
+  <p class="ev" id="ev"></p>
+  <h1 id="title"></h1>
+  <p id="intro"></p>
   <input id="name" placeholder="Nama kamu" maxlength="40" autocomplete="name">
   <button id="go">Mulai memotret</button>
 </section>
 <section id="cam" class="screen">
-  <div class="vw"><video id="v" playsinline muted autoplay></video><div class="zoom" id="zoom"></div></div>
+  <div class="vw"><video id="v" playsinline muted autoplay></video><div class="looks" id="looks"></div><div class="zoom" id="zoom"></div></div>
+  <button class="ic top l" id="flashBtn" aria-label="Flash" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
   <button class="ghost top" id="toAlbum">Album</button>
   <div class="msg" id="msg"></div>
-  <div class="bar"><span class="count" id="cnt"></span><button class="shutter" id="snap" aria-label="Ambil foto"></button><button class="ghost" id="flip">Balik</button></div>
+  <div class="bar"><span class="count" id="cnt"></span><button class="shutter" id="snap" aria-label="Ambil foto"></button>
+    <button class="ic" id="flip" aria-label="Balik kamera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button></div>
 </section>
 <section id="s-album" class="screen">
   <h1 id="al-t">Album pernikahan</h1>
@@ -48,13 +59,16 @@ video{width:100%;height:100%;object-fit:cover;transition:opacity .12s}
   <button class="ghost" id="more" hidden>Muat lagi</button>
   <div class="msg" id="msg2" style="padding:12px 0"></div>
 </section>
-<canvas id="c" hidden></canvas><canvas id="t" hidden></canvas>
+<div id="sf"></div><canvas id="c" hidden></canvas><canvas id="t" hidden></canvas>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script>
+// Kalimat pengantar sebelum masuk kamera. Ubah sesuka hati. {n} = jatah foto per tamu.
+const INTRO={t:'Abadikan momen kami',p:'Bantu kami meramaikan hari bahagia ini lewat sudut pandangmu. Setiap tamu mendapat {n} foto, dan semuanya masuk ke album bersama yang bisa dilihat semua orang.'};
 const $=id=>document.getElementById(id),db=supabase.createClient(CFG.url,CFG.key),bk=db.storage.from('photos');
 const show=id=>document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
-const L=localStorage,PS=30;let S,facing='environment',stream,busy=false,page=0,flushing=false;
+const L=localStorage,PS=30,sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let S,facing='environment',stream,busy=false,page=0,flushing=false,zoom=1,hw=false,track,torch=false,lit=false,flashOn=L.sa_flash==='1',look='flash';
 const gid=L.sa_gid||(L.sa_gid=crypto.randomUUID());
 const used=()=>+L.sa_used||0,left=()=>S.max_shots-used();
 const revealed=()=>new Date()>=new Date(S.reveal_at);
@@ -63,27 +77,28 @@ let Q=[];try{Q=JSON.parse(L.sa_q||'[]')}catch(e){}
 const saveQ=()=>{try{L.sa_q=JSON.stringify(Q);return true}catch(e){return false}};
 const note=m=>{$('msg').textContent=m;$('msg2').textContent=m};
 const pend=()=>note(Q.length?Q.length+' foto menunggu terkirim. Biarkan halaman ini terbuka.':'');
-// Portra hangat: hangat, kontras lembut, bayangan terangkat, highlight lembut, grain halus, vinyet tipis
-function T(v,vg,n){v=(v-.5)*1.06+.5;if(v>.82)v=.82+(v-.82)*.65;v=(.04+v*.94)*vg+n;return v<0?0:v>1?255:v*255}
-function portra(c){const w=c.width,h=c.height,x=c.getContext('2d'),d=x.getImageData(0,0,w,h),p=d.data,cx=w/2,cy=h/2,md=cx*cx+cy*cy;
+// Tiga gaya foto. m=pengali warna, sat=saturasi, con=kontras, lift=angkat hitam, sh=warna bayangan,
+// vig=vinyet, fl=efek flash (tengah terang), roll=highlight lembut, css/ov=pratinjau di layar kamera
+const LOOKS={
+ vintage:{n:'Saku 90an',m:[1.05,1.02,.88],sat:.88,con:.92,lift:.06,sh:[-.01,.025,0],vig:.28,fl:0,grain:.055,roll:0,stamp:1,css:'sepia(.28) saturate(.9) contrast(.95) brightness(1.04)',ov:.3},
+ flash:{n:'Flash',m:[1.04,1,.94],sat:1.15,con:1.15,lift:.02,sh:[0,.01,.03],vig:0,fl:.36,grain:.06,roll:0,css:'contrast(1.12) saturate(1.2) brightness(1.08)',ov:.3},
+ portra:{n:'Portra hangat',m:[1.05,1.01,.93],sat:.92,con:1.06,lift:.04,sh:[0,0,0],vig:.16,fl:0,grain:.05,roll:1,css:'sepia(.12) saturate(.95) contrast(1.04) brightness(1.03)',ov:.16}};
+function Qv(v,o,n){v=(v-.5)*o.con+.5;if(o.roll&&v>.82)v=.82+(v-.82)*.65;v=o.lift+v*(1-o.lift)+n;return v<0?0:v>1?255:v*255}
+function grade(c,o){const w=c.width,h=c.height,x=c.getContext('2d'),d=x.getImageData(0,0,w,h),p=d.data,cx=w/2,cy=h/2,md=cx*cx+cy*cy,m=o.m,s0=o.sh;
   for(let i=0,j=0;i<p.length;i+=4,j++){
-    let r=p[i]/255*1.05,g=p[i+1]/255*1.01,b=p[i+2]/255*.93;
-    const px=j%w-cx,py=((j/w)|0)-cy,vg=1-.16*(px*px+py*py)/md,l=.3*r+.59*g+.11*b;
-    r=l+(r-l)*.92;g=l+(g-l)*.92;b=l+(b-l)*.92;const n=(Math.random()-.5)*.05;
-    p[i]=T(r,vg,n);p[i+1]=T(g,vg,n);p[i+2]=T(b,vg,n)}
+    const px=j%w-cx,py=((j/w)|0)-cy,e=(px*px+py*py)/md,gn=(o.fl?1.12-o.fl*e:1)*(1-o.vig*e);
+    let r=p[i]/255*m[0]*gn,g=p[i+1]/255*m[1]*gn,b=p[i+2]/255*m[2]*gn;
+    const l=.3*r+.59*g+.11*b,s=1-Math.min(1,l),n=(Math.random()-.5)*o.grain;
+    r=l+(r-l)*o.sat+s*s0[0];g=l+(g-l)*o.sat+s*s0[1];b=l+(b-l)*o.sat+s*s0[2];
+    p[i]=Qv(r,o,n);p[i+1]=Qv(g,o,n);p[i+2]=Qv(b,o,n)}
   x.putImageData(d,0,0)}
-// Flash look: kamera sekali pakai, tengah terang kena flash, tepi gelap, warna jenuh, bayangan sedikit kebiruan
-const STYLE='flash';
-function F(v,n){v=(v-.5)*1.15+.5+.02+n;return v<0?0:v>1?255:v*255}
-function flash(c){const w=c.width,h=c.height,x=c.getContext('2d'),d=x.getImageData(0,0,w,h),p=d.data,cx=w/2,cy=h/2,md=cx*cx+cy*cy;
-  for(let i=0,j=0;i<p.length;i+=4,j++){
-    const px=j%w-cx,py=((j/w)|0)-cy,gain=1.12-.36*(px*px+py*py)/md;
-    let r=p[i]/255*gain*1.04,g=p[i+1]/255*gain,b=p[i+2]/255*gain*.94;
-    const l=.3*r+.59*g+.11*b,sh=1-Math.min(1,l);
-    r=l+(r-l)*1.15;g=l+(g-l)*1.15+sh*.01;b=l+(b-l)*1.15+sh*.03;const n=(Math.random()-.5)*.06;
-    p[i]=F(r,n);p[i+1]=F(g,n);p[i+2]=F(b,n)}
-  x.putImageData(d,0,0)}
-const film=c=>STYLE==='flash'?flash(c):portra(c);
+function stamp(c){const x=c.getContext('2d'),t=new Date(),z=a=>String(a).padStart(2,'0'),
+  s="'"+String(t.getFullYear()).slice(2)+' '+z(t.getMonth()+1)+' '+z(t.getDate()),f=Math.round(c.width*.045);
+  x.font='bold '+f+'px "Courier New",monospace';x.textAlign='right';x.fillStyle='#ff8a1f';x.shadowColor='#ff5a00';x.shadowBlur=f*.3;
+  x.fillText(s,c.width-f*.7,c.height-f*.8);x.shadowBlur=0}
+const film=c=>{const o=LOOKS[look];grade(c,o);if(o.stamp)stamp(c)};
+function setLook(k){look=k;L.sa_look=k;const o=LOOKS[k];$('v').style.filter=o.css;document.querySelector('.vw').style.setProperty('--vg',o.ov);
+  document.querySelectorAll('.lb').forEach(b=>b.classList.toggle('on',b.dataset.k===k))}
 async function flush(){
   if(flushing||!Q.length)return;flushing=true;
   while(Q.length){const it=Q[0];
@@ -98,31 +113,37 @@ async function flush(){
     }catch(e){break}}
   flushing=false;pend();if(Q.length)setTimeout(flush,6000)}
 addEventListener('online',flush);
-let zoom=1,hw=false,track;
-function initZoom(){
+function apply(){if(!hw&&!torch)return Promise.resolve();const a={};if(hw)a.zoom=zoom;if(torch)a.torch=lit;return track.applyConstraints({advanced:[a]}).catch(()=>{})}
+function initCam(){
   track=stream.getVideoTracks()[0];const c=track.getCapabilities?track.getCapabilities():{};
-  hw=!!c.zoom;const min=hw?c.zoom.min:1,max=hw?c.zoom.max:3;
-  const opts=[0.5,1,2,3].filter(z=>z>=min-.01&&z<=max+.01);
+  hw=!!c.zoom;torch=!!c.torch;lit=false;
+  const min=hw?c.zoom.min:1,max=hw?c.zoom.max:3,opts=[0.5,1,2,3].filter(z=>z>=min-.01&&z<=max+.01);
   $('zoom').innerHTML='';
   if(opts.length>1)opts.forEach(z=>{const b=document.createElement('button');b.className='zb';b.textContent=z+'x';b.dataset.z=z;b.onclick=()=>setZoom(z);$('zoom').append(b)});
+  $('flashBtn').hidden=!(facing==='user'||torch);$('flashBtn').classList.toggle('on',flashOn);
   setZoom(1)}
 async function setZoom(z){zoom=z;
   document.querySelectorAll('.zb').forEach(b=>b.classList.toggle('on',+b.dataset.z===z));
-  if(hw){try{await track.applyConstraints({advanced:[{zoom:z}]})}catch(e){}$('v').style.transform=''}
-  else $('v').style.transform='scale('+z+')'}
+  if(hw){$('v').style.transform='';await apply()}else $('v').style.transform='scale('+z+')'}
 const upd=()=>$('cnt').textContent=left()+' foto lagi';
 async function start(){
   if(left()<=0)return album();
   show('cam');upd();pend();$('toAlbum').hidden=!revealed();
   try{stream&&stream.getTracks().forEach(t=>t.stop());
     stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1920}},audio:false});
-    $('v').srcObject=stream;initZoom()}catch(e){note('Kamera tidak bisa dibuka. Izinkan akses kamera di browser, lalu muat ulang halaman.')}}
+    $('v').srcObject=stream;initCam()}catch(e){note('Kamera tidak bisa dibuka. Izinkan akses kamera di browser, lalu muat ulang halaman.')}}
 async function snap(){
   if(busy||!stream||left()<=0)return;busy=true;
+  const front=facing==='user',useT=flashOn&&!front&&torch;
+  if(flashOn&&front){$('sf').classList.add('on');await sleep(350)}
+  else if(useT){lit=true;await apply();await sleep(450)}
   const v=$('v'),c=$('c'),t=$('t'),vw=v.videoWidth,vh=v.videoHeight,sc=Math.max(v.clientWidth/vw,v.clientHeight/vh);
   let sw=v.clientWidth/sc,sh=v.clientHeight/sc;if(!hw){sw/=zoom;sh/=zoom}
   const k=Math.min(1,1280/Math.max(sw,sh));c.width=Math.round(sw*k);c.height=Math.round(sh*k);
-  c.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,c.width,c.height);film(c);
+  c.getContext('2d').drawImage(v,(vw-sw)/2,(vh-sh)/2,sw,sh,0,0,c.width,c.height);
+  if(flashOn&&front)$('sf').classList.remove('on');
+  if(useT){lit=false;apply()}
+  film(c);
   const tk=480/Math.max(c.width,c.height);t.width=Math.round(c.width*tk);t.height=Math.round(c.height*tk);
   t.getContext('2d').drawImage(c,0,0,t.width,t.height);
   Q.push({p:gid+'/'+crypto.randomUUID()+'.jpg',f:c.toDataURL('image/jpeg',.8),t:t.toDataURL('image/jpeg',.7)});
@@ -145,8 +166,10 @@ async function more(){
 $('go').onclick=()=>{const n=$('name').value.trim();if(!n){$('name').focus();return}L.sa_name=n;start()};
 $('snap').onclick=snap;$('more').onclick=more;$('toAlbum').onclick=album;$('al-back').onclick=start;
 $('flip').onclick=()=>{facing=facing==='environment'?'user':'environment';start()};
+$('flashBtn').onclick=()=>{flashOn=!flashOn;L.sa_flash=flashOn?'1':'0';$('flashBtn').classList.toggle('on',flashOn)};
+Object.keys(LOOKS).forEach(k=>{const b=document.createElement('button');b.className='lb';b.textContent=LOOKS[k].n;b.dataset.k=k;b.onclick=()=>setLook(k);$('looks').append(b)});
 (async()=>{const r=await db.from('settings').select('*').eq('id',1).single();
   if(r.error){document.body.innerHTML='<p style="padding:24px">Halaman belum siap. Periksa config.js.</p>';return}
-  S=r.data;$('title').textContent=S.event_name;$('n-shots').textContent=S.max_shots;document.title=S.event_name;
-  flush();L.sa_name?start():show('s-name')})();
+  S=r.data;document.title=S.event_name;$('ev').textContent=S.event_name;$('title').textContent=INTRO.t;$('intro').textContent=INTRO.p.replace('{n}',S.max_shots);
+  setLook(LOOKS[L.sa_look]?L.sa_look:'flash');flush();L.sa_name?start():show('s-name')})();
 </script></body></html>
